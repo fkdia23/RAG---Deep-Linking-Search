@@ -58,13 +58,13 @@ doc_processor = SemanticDocumentProcessor(
 class Citation(BaseModel):
     """Modèle de citation avec deep link"""
     citation_number: int
-    filename: str
+    filename: str = ""
     page_number: Optional[int] = None
     paragraph_number: Optional[int] = None
-    text_preview: str
-    deep_link: str
-    chunk_id: str
-    similarity_score: float
+    text_preview: str = ""
+    deep_link: str = ""
+    chunk_id: str = ""
+    similarity_score: float = 0.0
     is_default: Optional[bool] = False
 
 
@@ -85,12 +85,12 @@ class QueryResponse(BaseModel):
 class ChunkResponse(BaseModel):
     """Réponse pour un chunk spécifique"""
     chunk_id: str
-    filename: str
+    filename: str = ""
     text: str
-    page_number: int
-    paragraph_number: int
-    semantic_type: str
-    deep_link: str
+    page_number: int = 0
+    paragraph_number: int = 0
+    semantic_type: str = "paragraph"
+    deep_link: str = ""  # Optionnel avec valeur par défaut
 
 
 class DocumentChunksResponse(BaseModel):
@@ -167,9 +167,23 @@ async def query(request: QueryRequest):
         processing_time = time.time() - start_time
         query_duration.observe(processing_time)
         
+        # Debug : log les citations avant validation Pydantic
+        logger.info(f"📚 Citations reçues du RAG service : {len(result['citations'])}")
+        for i, citation in enumerate(result['citations']):
+            logger.info(f"Citation {i}: {citation.keys()}")
+            logger.info(f"  - deep_link type: {type(citation.get('deep_link'))}, value: {citation.get('deep_link')}")
+        
+        # Validation et création de la réponse
+        try:
+            citations_validated = [Citation(**c) for c in result['citations']]
+        except Exception as e:
+            logger.error(f"❌ Erreur validation Pydantic: {e}")
+            logger.error(f"Données problématiques: {result['citations']}")
+            raise
+        
         return QueryResponse(
             answer=result['answer'],
-            citations=[Citation(**c) for c in result['citations']],
+            citations=citations_validated,
             context_used=result['context_used'],
             processing_time=processing_time,
             has_valid_citations=result.get('has_valid_citations', False)
@@ -222,7 +236,7 @@ async def get_document_chunks(
         return DocumentChunksResponse(
             filename=filename,
             page_number=page_number,
-            chunks=[ChunkResponse(filename=filename, **c) for c in chunks],
+            chunks=[ChunkResponse(**c) for c in chunks],  # filename est déjà dans c
             total_chunks=len(chunks)
         )
         

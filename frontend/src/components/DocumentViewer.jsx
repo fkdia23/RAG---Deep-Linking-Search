@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
 import { ChevronLeft, ChevronRight, FileText, AlertCircle } from 'lucide-react';
+import MD5 from "crypto-js/md5";
 
 
 import '../DocumentViewer.css';
@@ -39,8 +40,10 @@ const DocumentViewer = () => {
         const docResponse = await fetch(`${API_URL}/documents`);
         const docData = await docResponse.json();
         
+        console.log({docData, docResponse , docId})
+
         const doc = docData.documents.find(d => 
-          d.filename.includes(docId) || docId.includes(d.filename)
+           MD5(d.filename).toString().includes(docId)
         );
         
         if (!doc) {

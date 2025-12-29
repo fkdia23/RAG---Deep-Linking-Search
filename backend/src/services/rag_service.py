@@ -10,7 +10,7 @@ from dataclasses import asdict
 try:
     from ..services.document_processor import ChunkMetadata
 except ImportError:
-    from semantic_document_processor import ChunkMetadata
+    from ..services.document_processor import ChunkMetadata
 
 logger = logging.getLogger(__name__)
 
@@ -192,11 +192,16 @@ class RAGServiceWithCitations:
         # Format: /viewer/{doc_id}?page={page}&para={para}&highlight={chunk_id}
         doc_id = hashlib.md5(chunk['filename'].encode()).hexdigest()
         
+        # Valeurs par défaut si None
+        page_number = chunk.get('page_number') or 1
+        paragraph_number = chunk.get('paragraph_number') or 1
+        chunk_id = chunk.get('chunk_id', '')
+        
         deep_link = (
             f"{self.frontend_base_url}/viewer/{doc_id}"
-            f"?page={chunk['page_number']}"
-            f"&paragraph={chunk['paragraph_number']}"
-            f"&highlight={chunk['chunk_id']}"
+            f"?page={page_number}"
+            f"&paragraph={paragraph_number}"
+            f"&highlight={chunk_id}"
         )
         
         return deep_link
@@ -315,13 +320,13 @@ RÉPONSE:"""
                 
                 citation_info = {
                     'citation_number': citation_num,
-                    'filename': chunk['filename'],
-                    'page_number': chunk['page_number'],
-                    'paragraph_number': chunk['paragraph_number'],
-                    'text_preview': chunk['text'][:200] + "..." if len(chunk['text']) > 200 else chunk['text'],
-                    'deep_link': chunk['deep_link'],
-                    'chunk_id': chunk['chunk_id'],
-                    'similarity_score': chunk.get('similarity', 0)
+                    'filename': chunk.get('filename', 'unknown'),
+                    'page_number': chunk.get('page_number', 1),
+                    'paragraph_number': chunk.get('paragraph_number', 1),
+                    'text_preview': chunk['text'][:200] + "..." if len(chunk.get('text', '')) > 200 else chunk.get('text', ''),
+                    'deep_link': chunk.get('deep_link', ''),
+                    'chunk_id': chunk.get('chunk_id', ''),
+                    'similarity_score': chunk.get('similarity', 0.0)
                 }
                 
                 citations.append(citation_info)
@@ -336,13 +341,13 @@ RÉPONSE:"""
         for i, chunk in enumerate(chunks, 1):
             citations.append({
                 'citation_number': i,
-                'filename': chunk['filename'],
-                'page_number': chunk['page_number'],
-                'paragraph_number': chunk['paragraph_number'],
-                'text_preview': chunk['text'][:200] + "..." if len(chunk['text']) > 200 else chunk['text'],
-                'deep_link': chunk['deep_link'],
-                'chunk_id': chunk['chunk_id'],
-                'similarity_score': chunk.get('similarity', 0),
+                'filename': chunk.get('filename', 'unknown'),
+                'page_number': chunk.get('page_number', 1),
+                'paragraph_number': chunk.get('paragraph_number', 1),
+                'text_preview': chunk['text'][:200] + "..." if len(chunk.get('text', '')) > 200 else chunk.get('text', ''),
+                'deep_link': chunk.get('deep_link', ''),
+                'chunk_id': chunk.get('chunk_id', ''),
+                'similarity_score': chunk.get('similarity', 0.0),
                 'is_default': True
             })
         
@@ -444,6 +449,7 @@ RÉPONSE:"""
             for record in result:
                 chunk = {
                     'chunk_id': record['chunk_id'],
+                    'filename': filename,  # Ajouter le filename
                     'text': record['text'],
                     'page_number': record['page_number'],
                     'paragraph_number': record['paragraph_number'],
@@ -451,6 +457,8 @@ RÉPONSE:"""
                     'end_char': record['end_char'],
                     'semantic_type': record['semantic_type']
                 }
+                # Générer le deep_link pour chaque chunk
+                chunk['deep_link'] = self._generate_deep_link(chunk)
                 chunks.append(chunk)
             
             return chunks

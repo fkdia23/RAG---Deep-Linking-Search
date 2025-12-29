@@ -18,11 +18,11 @@ class ChunkMetadata:
     doc_id: str
     filename: str
     page_number: int
-    paragraph_number: int
+    paragraph_number: None
     start_char: int
     end_char: int
     text: str
-    semantic_type: str  # 'title', 'paragraph', 'list', 'table'
+    semantic_type: None  # 'title', 'paragraph', 'list', 'table'
     
 
 class SemanticDocumentProcessor:
