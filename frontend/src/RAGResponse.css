@@ -1,0 +1,242 @@
+.rag-response {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+}
+
+/* Answer Section */
+.answer-section {
+  background: white;
+  border-radius: 1rem;
+  padding: 2rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.answer-section h3 {
+  margin: 0 0 1rem 0;
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.answer-content {
+  font-size: 1.125rem;
+  line-height: 1.8;
+  color: #334155;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+/* Citation Links dans le texte */
+.citation-link {
+  display: inline-block;
+  background: #3b82f6;
+  color: white;
+  padding: 0 0.5rem;
+  border-radius: 0.25rem;
+  text-decoration: none;
+  font-weight: 600;
+  font-size: 0.875rem;
+  margin: 0 0.125rem;
+  transition: all 0.2s;
+  vertical-align: baseline;
+}
+
+.citation-link:hover {
+  background: #2563eb;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(59, 130, 246, 0.3);
+}
+
+.warning-banner {
+  margin-top: 1rem;
+  padding: 0.75rem 1rem;
+  background: #fef3c7;
+  border-left: 3px solid #f59e0b;
+  border-radius: 0.25rem;
+  font-size: 0.875rem;
+  color: #92400e;
+}
+
+/* Citations Section */
+.citations-section {
+  background: white;
+  border-radius: 1rem;
+  padding: 2rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.citations-section h3 {
+  margin: 0 0 1.5rem 0;
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #1e293b;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.context-info {
+  font-size: 0.875rem;
+  color: #64748b;
+  font-weight: 400;
+}
+
+.citations-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+/* Citation Card */
+.citation-card {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.75rem;
+  padding: 1.25rem;
+  transition: all 0.2s;
+  position: relative;
+}
+
+.citation-card:hover {
+  border-color: #cbd5e1;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+}
+
+.citation-card.default {
+  border-color: #fbbf24;
+  background: #fffbeb;
+}
+
+/* Citation Header */
+.citation-header {
+  display: flex;
+  gap: 1rem;
+  align-items: flex-start;
+  margin-bottom: 1rem;
+}
+
+.citation-badge {
+  background: #3b82f6;
+  color: white;
+  font-weight: 700;
+  font-size: 0.875rem;
+  padding: 0.25rem 0.625rem;
+  border-radius: 0.5rem;
+  flex-shrink: 0;
+}
+
+.citation-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.citation-file {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 600;
+  color: #1e293b;
+  font-size: 0.95rem;
+}
+
+.citation-location {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+  color: #64748b;
+}
+
+.similarity-badge {
+  background: #10b981;
+  color: white;
+  font-weight: 600;
+  font-size: 0.75rem;
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.375rem;
+  flex-shrink: 0;
+}
+
+/* Citation Preview */
+.citation-preview {
+  background: white;
+  border-left: 3px solid #3b82f6;
+  padding: 1rem;
+  margin-bottom: 1rem;
+  border-radius: 0.25rem;
+  font-size: 0.9375rem;
+  line-height: 1.6;
+  color: #475569;
+  font-style: italic;
+}
+
+/* View Source Button */
+.view-source-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.625rem 1rem;
+  background: #3b82f6;
+  color: white;
+  text-decoration: none;
+  border-radius: 0.5rem;
+  font-weight: 500;
+  font-size: 0.875rem;
+  transition: all 0.2s;
+}
+
+.view-source-btn:hover {
+  background: #2563eb;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 6px rgba(59, 130, 246, 0.3);
+}
+
+.default-indicator {
+  margin-top: 0.75rem;
+  padding: 0.5rem 0.75rem;
+  background: #fef3c7;
+  border-radius: 0.375rem;
+  font-size: 0.8125rem;
+  color: #92400e;
+  text-align: center;
+}
+
+/* Metadata */
+.metadata {
+  display: flex;
+  gap: 1.5rem;
+  padding: 1rem;
+  background: #f8fafc;
+  border-radius: 0.5rem;
+  font-size: 0.875rem;
+  color: #64748b;
+  flex-wrap: wrap;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .answer-section,
+  .citations-section {
+    padding: 1.25rem;
+  }
+  
+  .answer-content {
+    font-size: 1rem;
+  }
+  
+  .citation-header {
+    flex-direction: column;
+  }
+  
+  .citation-badge {
+    align-self: flex-start;
+  }
+  
+  .metadata {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+}

@@ -1,5 +1,7 @@
 from pydantic_settings import BaseSettings
 from typing import Optional
+import os
+
 
 class Settings(BaseSettings):
     # Neo4j
@@ -16,6 +18,9 @@ class Settings(BaseSettings):
     UPLOAD_DIR: str = "uploads"
     MAX_FILE_SIZE: int = 50 * 1024 * 1024  # 50MB
     
+    # Frontend
+    FRONTEND_URL: str = "http://localhost:3000"
+
     # Chunking
     CHUNK_SIZE: int = 500
     CHUNK_OVERLAP: int = 50

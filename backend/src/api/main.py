@@ -1,32 +1,34 @@
-from fastapi import FastAPI, UploadFile, File, HTTPException, BackgroundTasks
+from fastapi import FastAPI, UploadFile, File, HTTPException, BackgroundTasks, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, HttpUrl
+from pydantic import BaseModel, HttpUrl, Field
 from typing import List, Optional
 import os
 import aiofiles
 from prometheus_client import Counter, Histogram, generate_latest
 from fastapi.responses import Response
 import time
+import logging
+from dataclasses import asdict
 
-from ..services.rag_service import RAGService
-from ..services.document_processor import DocumentProcessor
+from ..services.document_processor import SemanticDocumentProcessor, ChunkMetadata
+from ..services.rag_service import RAGServiceWithCitations
 from ..config import settings
 
-import traceback
-
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # Initialisation de l'application
 app = FastAPI(
-    title="RAG System API",
-    description="API pour système RAG avec Neo4j et Ollama",
-    version="1.0.0"
+    title="RAG System API with Citations & Deep Linking",
+    description="API pour système RAG optimisé avec chunking sémantique, citations précises et deep linking",
+    version="2.0.0"
 )
 
 # Configuration CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # À restreindre en production
+    allow_origins=["http://localhost:3000", "http://localhost:5173"],  # Ajuster selon votre frontend
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -38,100 +40,206 @@ query_duration = Histogram('rag_query_duration_seconds', 'Query duration')
 upload_counter = Counter('rag_uploads_total', 'Total number of uploads')
 
 # Initialisation des services
-rag_service = RAGService(
+rag_service = RAGServiceWithCitations(
     neo4j_uri=settings.NEO4J_URI,
     neo4j_user=settings.NEO4J_USER,
     neo4j_password=settings.NEO4J_PASSWORD,
-    ollama_url=settings.OLLAMA_URL
+    ollama_url=settings.OLLAMA_URL,
+    frontend_base_url=settings.FRONTEND_URL  # À ajouter dans config
 )
 
-doc_processor = DocumentProcessor(
+doc_processor = SemanticDocumentProcessor(
     chunk_size=500,
     chunk_overlap=50
 )
 
 # Modèles Pydantic
+
+class Citation(BaseModel):
+    """Modèle de citation avec deep link"""
+    citation_number: int
+    filename: str
+    page_number: Optional[int] = None
+    paragraph_number: Optional[int] = None
+    text_preview: str
+    deep_link: str
+    chunk_id: str
+    similarity_score: float
+    is_default: Optional[bool] = False
+
+
 class QueryRequest(BaseModel):
-    question: str
-    top_k: Optional[int] = 5
+    question: str = Field(..., description="Question à poser au système RAG")
+    top_k: Optional[int] = Field(5, ge=1, le=20, description="Nombre de chunks à récupérer")
+    min_similarity: Optional[float] = Field(0.3, ge=0, le=1, description="Score de similarité minimum")
+
 
 class QueryResponse(BaseModel):
     answer: str
-    sources: List[dict]
+    citations: List[Citation]
     context_used: int
     processing_time: float
+    has_valid_citations: bool
 
-class URLUploadRequest(BaseModel):
-    url: HttpUrl
+
+class ChunkResponse(BaseModel):
+    """Réponse pour un chunk spécifique"""
+    chunk_id: str
+    filename: str
+    text: str
+    page_number: int
+    paragraph_number: int
+    semantic_type: str
+    deep_link: str
+
+
+class DocumentChunksResponse(BaseModel):
+    """Liste des chunks d'un document"""
+    filename: str
+    page_number: Optional[int]
+    chunks: List[ChunkResponse]
+    total_chunks: int
+
+
+class UploadResponse(BaseModel):
+    message: str
+    filename: str
+    chunks_created: int
+    processing_time: float
+
 
 class HealthResponse(BaseModel):
     status: str
     neo4j: str
     ollama: str
 
+
 # Routes
 
 @app.get("/")
 async def root():
     return {
-        "message": "RAG System API",
-        "version": "1.0.0",
+        "message": "RAG System API with Citations & Deep Linking",
+        "version": "2.0.0",
+        "features": [
+            "Semantic chunking",
+            "Precise citations",
+            "Deep linking to source",
+            "React frontend support"
+        ],
         "docs": "/docs"
     }
+
 
 @app.get("/health", response_model=HealthResponse)
 async def health_check():
     """Vérifie l'état de santé du système"""
-    neo4j_status = "ok"
-    ollama_status = "ok"
+    health = rag_service.health_check()
     
-    try:
-        with rag_service.driver.session() as session:
-            session.run("RETURN 1")
-    except Exception as e:
-        neo4j_status = f"error: {str(e)}"
-    
-    try:
-        rag_service.ollama_client.list()
-    except Exception as e:
-        ollama_status = f"error: {str(e)}"
-    
-    status = "healthy" if neo4j_status == "ok" and ollama_status == "ok" else "degraded"
+    status = "healthy" if all(v == "ok" for v in health.values()) else "degraded"
     
     return {
         "status": status,
-        "neo4j": neo4j_status,
-        "ollama": ollama_status
+        **health
     }
+
 
 @app.post("/query", response_model=QueryResponse)
 async def query(request: QueryRequest):
-    """Effectue une requête RAG"""
+    """
+    Effectue une requête RAG avec citations obligatoires
+    
+    Retourne une réponse avec:
+    - La réponse textuelle
+    - Les citations avec liens cliquables
+    - Les métadonnées de traitement
+    """
     query_counter.inc()
     start_time = time.time()
     
     try:
-        result = rag_service.query(request.question, request.top_k)
+        result = rag_service.query(
+            question=request.question,
+            top_k=request.top_k,
+            min_similarity=request.min_similarity
+        )
+        
         processing_time = time.time() - start_time
         query_duration.observe(processing_time)
         
-        return {
-            **result,
-            "processing_time": processing_time
-        }
+        return QueryResponse(
+            answer=result['answer'],
+            citations=[Citation(**c) for c in result['citations']],
+            context_used=result['context_used'],
+            processing_time=processing_time,
+            has_valid_citations=result.get('has_valid_citations', False)
+        )
+        
     except Exception as e:
-        print("❌ Erreur lors de la requête RAG")
-        print("Question :", request.question)
-        print("Top_k :", request.top_k)
-        print("Exception :", e)
-        print("Traceback complet :")
-        traceback.print_exc()  # 👈 LE point clé
+        logger.error(f"❌ Erreur lors de la requête RAG: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.post("/upload/file")
+
+@app.get("/chunk/{chunk_id}", response_model=ChunkResponse)
+async def get_chunk(chunk_id: str):
+    """
+    Récupère un chunk spécifique par son ID
+    Utilisé pour le deep linking depuis le frontend
+    """
+    try:
+        chunk = rag_service.get_chunk_by_id(chunk_id)
+        
+        if not chunk:
+            raise HTTPException(status_code=404, detail="Chunk non trouvé")
+        
+        return ChunkResponse(**chunk)
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Erreur récupération chunk: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/document/{filename}/chunks", response_model=DocumentChunksResponse)
+async def get_document_chunks(
+    filename: str,
+    page_number: Optional[int] = Query(None, description="Filtrer par numéro de page")
+):
+    """
+    Récupère tous les chunks d'un document
+    Optionnellement filtré par page
+    """
+    try:
+        chunks = rag_service.get_document_chunks(filename, page_number)
+        
+        if not chunks:
+            raise HTTPException(
+                status_code=404, 
+                detail=f"Aucun chunk trouvé pour le document '{filename}'"
+            )
+        
+        return DocumentChunksResponse(
+            filename=filename,
+            page_number=page_number,
+            chunks=[ChunkResponse(filename=filename, **c) for c in chunks],
+            total_chunks=len(chunks)
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Erreur récupération chunks document: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/upload/file", response_model=UploadResponse)
 async def upload_file(file: UploadFile = File(...)):
-    """Upload et traite un fichier"""
+    """
+    Upload et traite un fichier avec chunking sémantique
+    """
     upload_counter.inc()
+    start_time = time.time()
     
     # Vérifier l'extension
     allowed_extensions = ['.pdf', '.txt', '.docx', '.doc']
@@ -153,76 +261,34 @@ async def upload_file(file: UploadFile = File(...)):
             content = await file.read()
             await f.write(content)
         
-        # Traiter le document
+        # Traiter le document avec chunking sémantique
+        logger.info(f"📄 Traitement du fichier: {file.filename}")
         chunks = doc_processor.process_document(file_path)
         
         # Stocker dans Neo4j
-        rag_service.store_document_chunks(file.filename, chunks)
+        logger.info(f"💾 Stockage de {len(chunks)} chunks dans Neo4j")
+        rag_service.store_document_chunks(chunks)
         
-        return {
-            "message": "Fichier traité avec succès",
-            "filename": file.filename,
-            "chunks_created": len(chunks)
-        }
+        processing_time = time.time() - start_time
+        
+        return UploadResponse(
+            message="Fichier traité avec succès",
+            filename=file.filename,
+            chunks_created=len(chunks),
+            processing_time=processing_time
+        )
     
     except Exception as e:
+        logger.error(f"❌ Erreur traitement fichier: {e}", exc_info=True)
         # Nettoyer en cas d'erreur
         if os.path.exists(file_path):
             os.remove(file_path)
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.post("/upload/url")
-async def upload_from_url(request: URLUploadRequest, background_tasks: BackgroundTasks):
-    """Télécharge et traite un document depuis une URL"""
-    upload_counter.inc()
-    
-    try:
-        filename, chunks = doc_processor.process_from_url(
-            str(request.url),
-            "uploads"
-        )
-        
-        # Stocker dans Neo4j
-        rag_service.store_document_chunks(filename, chunks)
-        
-        return {
-            "message": "Document téléchargé et traité avec succès",
-            "filename": filename,
-            "chunks_created": len(chunks)
-        }
-    
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.post("/upload/directory")
-async def upload_directory(directory_path: str):
-    """Traite tous les documents dans un répertoire"""
-    upload_counter.inc()
-    
-    if not os.path.exists(directory_path):
-        raise HTTPException(status_code=404, detail="Répertoire non trouvé")
-    
-    try:
-        results = doc_processor.process_directory(directory_path)
-        
-        # Stocker tous les documents
-        total_chunks = 0
-        for filename, chunks in results.items():
-            rag_service.store_document_chunks(filename, chunks)
-            total_chunks += len(chunks)
-        
-        return {
-            "message": "Répertoire traité avec succès",
-            "files_processed": len(results),
-            "total_chunks": total_chunks
-        }
-    
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/documents")
 async def list_documents():
-    """Liste tous les documents stockés"""
+    """Liste tous les documents stockés avec leurs statistiques"""
     with rag_service.driver.session() as session:
         result = session.run(
             """
@@ -230,6 +296,7 @@ async def list_documents():
             OPTIONAL MATCH (d)-[:CONTAINS]->(c:Chunk)
             RETURN d.filename as filename, 
                    d.created_at as created_at,
+                   d.total_pages as total_pages,
                    count(c) as chunk_count
             ORDER BY d.created_at DESC
             """
@@ -240,37 +307,52 @@ async def list_documents():
             documents.append({
                 'filename': record['filename'],
                 'created_at': str(record['created_at']),
+                'total_pages': record['total_pages'],
                 'chunk_count': record['chunk_count']
             })
         
-        return {"documents": documents}
+        return {"documents": documents, "total": len(documents)}
+
 
 @app.delete("/documents/{filename}")
 async def delete_document(filename: str):
-    """Supprime un document et ses chunks"""
+    """Supprime un document et tous ses chunks"""
+    import hashlib
+    
+    doc_id = hashlib.md5(filename.encode()).hexdigest()
+    
     with rag_service.driver.session() as session:
         result = session.run(
             """
-            MATCH (d:Document {filename: $filename})
+            MATCH (d:Document {id: $doc_id})
             OPTIONAL MATCH (d)-[:CONTAINS]->(c:Chunk)
             DETACH DELETE d, c
             RETURN count(d) as deleted_count
             """,
-            filename=filename
+            doc_id=doc_id
         )
         
         record = result.single()
         if record['deleted_count'] == 0:
             raise HTTPException(status_code=404, detail="Document non trouvé")
         
-        return {"message": f"Document '{filename}' supprimé"}
+        logger.info(f"🗑️ Document '{filename}' supprimé")
+        return {"message": f"Document '{filename}' supprimé avec succès"}
+
 
 @app.get("/metrics")
 async def metrics():
     """Expose les métriques Prometheus"""
     return Response(content=generate_latest(), media_type="text/plain")
 
+
 @app.on_event("shutdown")
 async def shutdown_event():
     """Ferme les connexions proprement"""
+    logger.info("🔌 Fermeture des connexions...")
     rag_service.close()
+
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)

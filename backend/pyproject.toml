@@ -21,6 +21,7 @@ dependencies = [
     "chardet>=5.2.0",
     "prometheus-client>=0.19.0",
     "python-jose[cryptography]>=3.3.0",
+    "spacy>=3.7.2",
 ]
 
 [project.optional-dependencies]
@@ -31,3 +32,5 @@ dev = [
     "ruff>=0.1.8",
 ]
 
+# Note: Pour installer spaCy avec le modèle français :
+# python -m spacy download fr_core_news_sm
