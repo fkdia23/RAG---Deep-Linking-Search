@@ -283,15 +283,3 @@ npm test
 4. Ajouter l'authentification
 5. Limiter la taille des uploads
 6. Valider les URLs avant téléchargement
-
-## Licence
-
-MIT
-
-## Support
-
-Pour toute question ou problème :
-- Issues GitHub
-- Documentation Anthropic Claude
-- Documentation Neo4j
-- Documentation Ollama
