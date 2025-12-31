@@ -42,45 +42,45 @@ services:
     # Pour CPU uniquement, commenter la section deploy ci-dessus
 
   # Backend FastAPI
-  # backend:
-  #   build: ./backend
-  #   container_name: rag_backend
-  #   ports:
-  #     - "8000:8000"
-  #   environment:
-  #     - NEO4J_URI=bolt://neo4j:7687
-  #     - NEO4J_USER=neo4j
-  #     - NEO4J_PASSWORD=ragpassword123
-  #     - OLLAMA_URL=http://ollama:11434
-  #     - LLM_MODEL=mistral
-  #     - EMBEDDING_MODEL=nomic-embed-text
-  #   volumes:
-  #     - ./backend:/app
-  #     - uploads:/app/uploads
-  #   depends_on:
-  #     neo4j:
-  #       condition: service_healthy
-  #     ollama:
-  #       condition: service_started
-  #   networks:
-  #     - rag_network
-  #   command: uvicorn src.api.main:app --host 0.0.0.0 --port 8000 --reload
+  backend:
+    build: ./backend
+    container_name: rag_backend
+    ports:
+      - "8000:8000"
+    environment:
+      - NEO4J_URI=bolt://neo4j:7687
+      - NEO4J_USER=neo4j
+      - NEO4J_PASSWORD=ragpassword123
+      - OLLAMA_URL=http://ollama:11434
+      - LLM_MODEL=mistral
+      - EMBEDDING_MODEL=nomic-embed-text
+    volumes:
+      - ./backend:/app
+      - uploads:/app/uploads
+    depends_on:
+      neo4j:
+        condition: service_healthy
+      ollama:
+        condition: service_started
+    networks:
+      - rag_network
+    command: uvicorn src.api.main:app --host 0.0.0.0 --port 8000 --reload
 
   # # Frontend React
-  # frontend:
-  #   build: ./frontend
-  #   container_name: rag_frontend
-  #   ports:
-  #     - "3000:3000"
-  #   environment:
-  #     - VITE_API_URL=http://localhost:8000
-  #   volumes:
-  #     - ./frontend:/app
-  #     - /app/node_modules
-  #   depends_on:
-  #     - backend
-  #   networks:
-  #     - rag_network
+  frontend:
+    build: ./frontend
+    container_name: rag_frontend
+    ports:
+      - "3000:3000"
+    environment:
+      - VITE_API_URL=http://localhost:8000
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    depends_on:
+      - backend
+    networks:
+      - rag_network
 
   # Prometheus pour monitoring
   prometheus:
